@@ -1,0 +1,15 @@
+name: is-566-08-prefect
+prefect-version: 3.6.19
+
+build: null
+push: null
+pull: null
+
+deployments:
+  - name: etl-weather-print-minimal
+    description: Extract, transform, and log weather data.
+    entrypoint: flows/01-ETLWeatherPrint.py:etl_weather_print
+    parameters:
+      location: Berlin
+    work_pool:
+      name: is566-pool

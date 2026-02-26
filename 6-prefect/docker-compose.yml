@@ -1,0 +1,141 @@
+services:
+  postgres:
+    image: postgres:13
+    profiles:
+      - db
+    container_name: postgres
+    env_file:
+      - .env
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+      - ./sql/01_create_db.sql:/docker-entrypoint-initdb.d/01_create_db.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: on-failure
+    mem_limit: 256m
+    cpus: 0.5
+    ports:
+      - "5432:5432"
+
+  adminer:
+    image: adminer
+    profiles:
+      - db
+    platform: linux/amd64
+    restart: on-failure
+    mem_limit: 64m
+    cpus: 0.25
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    profiles:
+      - stage1
+      - stage2
+    command: prefect server start --host 0.0.0.0
+    env_file:
+      - .env
+    environment:
+      PREFECT_UI_API_URL: http://localhost:4200/api
+      PREFECT_LOGGING_SERVER_LEVEL: INFO
+    volumes:
+      - ./:/opt/prefect/is566
+    working_dir: /opt/prefect/is566
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+    restart: on-failure
+    mem_limit: 512m
+    cpus: 1.0
+    ports:
+      - "4200:4200"
+
+  prefect-bootstrap:
+    image: prefecthq/prefect:3-latest
+    profiles:
+      - stage2
+    env_file:
+      - .env
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL:-http://prefect-server:4200/api}
+      PYTHONPATH: /opt/prefect/is566/flows
+      UV_PROJECT_ENVIRONMENT: /opt/prefect/.venv
+    volumes:
+      - ./:/opt/prefect/is566
+    working_dir: /opt/prefect/is566
+    command: |
+      bash -ec '
+        python -m pip install --no-cache-dir uv
+        uv sync --no-dev
+        (uv run prefect work-pool inspect is566-pool >/dev/null 2>&1 || uv run prefect work-pool create is566-pool --type process)
+        uv run prefect deploy --all --prefect-file prefect.yaml
+      '
+    restart: "no"
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-worker:
+    image: prefecthq/prefect:3-latest
+    profiles:
+      - stage2
+    env_file:
+      - .env
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL:-http://prefect-server:4200/api}
+      PYTHONPATH: /opt/prefect/is566/flows
+      UV_PROJECT_ENVIRONMENT: /opt/prefect/.venv
+    volumes:
+      - ./:/opt/prefect/is566
+    working_dir: /opt/prefect/is566
+    command: |
+      bash -ec '
+        python -m pip install --no-cache-dir uv
+        uv sync --no-dev
+        uv run prefect worker start --pool is566-pool --type process --limit 1
+      '
+    restart: on-failure
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      prefect-bootstrap:
+        condition: service_completed_successfully
+
+  prefect-cli:
+    image: prefecthq/prefect:3-latest
+    profiles:
+      - stage1
+      - stage2
+    platform: linux/amd64
+    env_file:
+      - .env
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL:-http://prefect-server:4200/api}
+      PYTHONPATH: /opt/prefect/is566/flows
+      UV_PROJECT_ENVIRONMENT: /opt/prefect/.venv
+    volumes:
+      - ./:/opt/prefect/is566
+    working_dir: /opt/prefect/is566
+    command: bash
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+volumes:
+  postgres-db-volume:
