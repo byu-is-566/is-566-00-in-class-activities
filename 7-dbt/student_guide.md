@@ -2,7 +2,7 @@
 
 ## Setup
 
-You should already have the Jaffle Shop DuckDB project open and working. Confirm by running:
+You should already have the Jaffle Shop DuckDB project open and working. (Create the dbt `.venv` with `uv` if needed.) Confirm by running:
 
 ```bash
 dbt build
@@ -25,7 +25,7 @@ All models should build and all existing tests should pass.
    - What type of test is it?
 3. Run all tests:
    ```bash
-   dbt test
+   dbt build
    ```
 4. Run tests for just one model:
    ```bash
