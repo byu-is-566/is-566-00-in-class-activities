@@ -13,3 +13,7 @@ env/
 **/*.duckdb
 **/*.duckdb.wal
 .vscode/*
+*_sol.sql
+test_sol/*
+.claude/*
+solutions/*
