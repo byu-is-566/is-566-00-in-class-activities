@@ -25,7 +25,7 @@ All models should build and all existing tests should pass.
    - What type of test is it?
 3. Run all tests:
    ```bash
-   dbt build
+   dbt test
    ```
 4. Run tests for just one model:
    ```bash
